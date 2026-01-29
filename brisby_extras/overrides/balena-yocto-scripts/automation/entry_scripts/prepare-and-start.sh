@@ -11,20 +11,21 @@ trap 'balena_docker_stop fail' SIGINT SIGTERM
 INSTALL_DIR="/work"
 
 # Create the normal user to be used for bitbake (barys)
+# When host is root (0:0), we cannot create UID 0 (root exists) and Bitbake refuses to run as root,
+# so use a fallback builder UID/GID (1000:1000) inside the container.
+FALLBACK_UID=1000
+FALLBACK_GID=1000
+if [ "$BUILDER_UID" = "0" ] || [ "$BUILDER_GID" = "0" ]; then
+  BUILDER_UID=$FALLBACK_UID
+  BUILDER_GID=$FALLBACK_GID
+  echo "[INFO] Host is root (0:0); using builder $BUILDER_UID:$BUILDER_GID so Bitbake can run (Bitbake forbids root)."
+fi
 echo "[INFO] Creating and setting builder user $BUILDER_UID:$BUILDER_GID."
-# GID may already exist in container (e.g. 0=root, 20=dialout on Ubuntu; host macOS often uses 20=staff)
-if [ "$BUILDER_GID" != "0" ]; then
-  getent group "$BUILDER_GID" >/dev/null 2>&1 || groupadd -g "$BUILDER_GID" builder
-fi
+# GID may already exist in container (e.g. 20=dialout on Ubuntu; host macOS often uses 20=staff)
+getent group "$BUILDER_GID" >/dev/null 2>&1 || groupadd -g "$BUILDER_GID" builder
 if ! cat "/etc/group" | grep docker > /dev/null; then  groupadd docker; fi
-# UID 0 = root already exists; only create builder when non-root
-if [ "$BUILDER_UID" != "0" ]; then
-  useradd -m -u $BUILDER_UID -g $BUILDER_GID -G docker builder && newgrp docker
-  RUN_AS_USER="builder"
-else
-  gpasswd -a root docker 2>/dev/null || true
-  RUN_AS_USER="root"
-fi
+useradd -m -u $BUILDER_UID -g $BUILDER_GID -G docker builder && newgrp docker
+RUN_AS_USER="builder"
 
 # Make the "builder" user inherit the $SSH_AUTH_SOCK variable set-up so he can use the host ssh keys for various operations
 # (like being able to clone private git repos from within bitbake using the ssh protocol)
