@@ -57,6 +57,8 @@ cd ~/balena-raspberrypi
 
 The build runs in Docker and can take **4–8 hours**. The script will copy the image and overlay into `$BRISBY_BUILD_SPACE` when done.
 
+**Running as root (e.g. `ssh root@...`):** The script will chown the repo and build space to 1000:1000 so the container’s builder user can write; no extra step needed.
+
 ---
 
 ## 3. After the build

@@ -144,6 +144,12 @@ elif ! docker image inspect "${HELPER_TAG}" &>/dev/null; then
     fi
 fi
 
+# When host is root, the container runs as builder 1000:1000; chown repo and build space so builder can write to /work
+if [ "$(id -u)" = "0" ]; then
+    echo "[brisby] Running as root; chown repo and build space to 1000:1000 so container builder can write..."
+    chown -R 1000:1000 "${REPO_ROOT}" "${BUILD_SPACE}"
+fi
+
 cd "${REPO_ROOT}"
 ./balena-yocto-scripts/build/balena-build.sh \
     -d "${DEVICE_TYPE}" \
