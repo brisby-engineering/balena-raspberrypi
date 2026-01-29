@@ -20,7 +20,7 @@ If your “new folder” is a **copy** of the project (not a clone):
      https://github.com/balena-os/balena-raspberrypi → “Fork”.
   2. Clone your fork and go into it:
      ```bash
-     git clone --recursive https://github.com/YOUR_USER/balena-raspberrypi.git brisby-upload
+     git clone --recursive git@github.com:brisby-engineering/balena-raspberrypi.git brisby-upload
      cd brisby-upload
      git checkout -b brisby
      ```
@@ -45,7 +45,7 @@ cd /path/to/balena-raspberrypi   # or your "new folder" if it's a clone
 
 git remote -v
 # If 'origin' is balena-os/balena-raspberrypi, add your fork:
-git remote add myfork https://github.com/YOUR_USER/balena-raspberrypi.git
+git remote add myfork git@github.com:brisby-engineering/balena-raspberrypi.git
 # Or if origin is already your fork, use origin.
 
 git checkout -b brisby   # or your branch name
@@ -167,7 +167,7 @@ So: “upload” = push main repo + push each changed submodule to your fork, th
 If you used **Option A** (§3.3) and pushed everything:
 
 ```bash
-git clone --recursive https://github.com/YOUR_USER/balena-raspberrypi.git -b brisby
+git clone --recursive git@github.com:brisby-engineering/balena-raspberrypi.git -b brisby
 cd balena-raspberrypi
 # Submodules should already be on your brisby branches; verify:
 git submodule status

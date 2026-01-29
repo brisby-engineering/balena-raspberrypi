@@ -17,14 +17,14 @@ So the main Brisby code is in version control locally.
 ```bash
 cd /path/to/balena-raspberrypi   # your repo root
 
-# Add your fork (use your GitHub username and fork URL)
-git remote add myfork https://github.com/YOUR_GITHUB_USER/balena-raspberrypi.git
+# Add Brisby fork (if not already origin)
+git remote add myfork git@github.com:brisby-engineering/balena-raspberrypi.git
 
 # Push the brisby branch to your fork
 git push myfork brisby
 ```
 
-Replace `YOUR_GITHUB_USER` with your GitHub username. After this, your fork will have the `brisby` branch with all of `brisby_extras` and `layers/meta-brisby`.
+After this, the fork will have the `brisby` branch with all of `brisby_extras` and `layers/meta-brisby`.
 
 ---
 
@@ -92,7 +92,7 @@ If you skip forking the submodules, the main repo will still have the correct re
 
 | Step | Command / action |
 |------|-------------------|
-| Push main Brisby code | `git remote add myfork https://github.com/YOUR_USER/balena-raspberrypi.git` then `git push myfork brisby` |
+| Push main Brisby code | `git remote add myfork git@github.com:brisby-engineering/balena-raspberrypi.git` then `git push myfork brisby` |
 | (Optional) Commit submodule changes | In `balena-yocto-scripts` and `layers/poky`: create branch, add files, commit |
 | (Optional) Record submodule refs | In main repo: `git add balena-yocto-scripts layers/poky`, commit, push |
 | (Optional) Push submodule commits | Fork balena-yocto-scripts and poky, add remotes, push `brisby` branch |

@@ -14,12 +14,16 @@
 #   ./setup-linux-build-box.sh [REPO_URL]
 #
 # If REPO_URL is omitted, REPO_URL env var must be set (your fork with meta-brisby).
-# Example: REPO_URL=https://github.com/YOUR_USER/balena-raspberrypi.git ./setup-linux-build-box.sh
+# Example: REPO_URL=git@github.com:brisby-engineering/balena-raspberrypi.git ./setup-linux-build-box.sh
 #
 
 set -e
 
+# Avoid GUI prompts (e.g. "restart services that use old libraries?" / needrestart)
+export DEBIAN_FRONTEND=noninteractive
+
 REPO_URL="${1:-${REPO_URL}}"
+BRISBY_BRANCH="${BRISBY_BRANCH:-brisby}"
 INSTALL_DIR="${BRISBY_INSTALL_DIR:-$HOME/balena-raspberrypi}"
 BUILD_SPACE="${BRISBY_BUILD_SPACE:-$HOME/brisby_custom}"
 
@@ -31,14 +35,14 @@ echo ""
 # --- Docker ---
 if ! command -v docker &>/dev/null; then
     echo "[setup] Installing Docker..."
-    sudo apt-get update
-    sudo apt-get install -y ca-certificates curl
+    sudo -E apt-get update
+    sudo -E apt-get install -y ca-certificates curl
     sudo install -m 0755 -d /etc/apt/keyrings
     sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
     sudo chmod a+r /etc/apt/keyrings/docker.asc
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo -E apt-get update
+    sudo -E apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     sudo usermod -aG docker "$USER"
     echo "[setup] Docker installed. You may need to log out and back in for group 'docker' to apply."
 else
@@ -46,28 +50,31 @@ else
 fi
 
 # --- Git and minimal deps ---
-sudo apt-get install -y git
+sudo -E apt-get install -y git
 
 # --- Clone repo (must contain meta-brisby and brisby_extras) ---
 if [[ -z "${REPO_URL}" ]]; then
     echo ""
     echo "[setup] ERROR: No repo URL. Your balena-raspberrypi fork (with meta-brisby) must be cloned."
     echo "  Set REPO_URL or pass it as the first argument:"
-    echo "    REPO_URL=https://github.com/YOUR_USER/balena-raspberrypi.git $0"
+    echo "    REPO_URL=git@github.com:brisby-engineering/balena-raspberrypi.git $0"
     echo "  or push your branch to a fork and run:"
-    echo "    $0 https://github.com/YOUR_USER/balena-raspberrypi.git"
+    echo "    $0 git@github.com:brisby-engineering/balena-raspberrypi.git"
     exit 1
 fi
 
 if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
-    echo "[setup] Cloning repo from ${REPO_URL} into ${INSTALL_DIR}..."
-    git clone --recursive "${REPO_URL}" "${INSTALL_DIR}"
+    echo "[setup] Cloning repo from ${REPO_URL} into ${INSTALL_DIR} (branch: ${BRISBY_BRANCH})..."
+    git clone -b "${BRISBY_BRANCH}" --recursive "${REPO_URL}" "${INSTALL_DIR}"
     cd "${INSTALL_DIR}"
-    echo "[setup] If your brisby branch is not default, run: git checkout <your-branch>"
 else
     echo "[setup] Directory ${INSTALL_DIR} already exists (git repo). Skipping clone."
     cd "${INSTALL_DIR}"
-    echo "[setup] To refresh: git pull && git submodule update --init --recursive"
+    echo "[setup] Fetching and checking out ${BRISBY_BRANCH}..."
+    git fetch origin "${BRISBY_BRANCH}" 2>/dev/null || true
+    git checkout "${BRISBY_BRANCH}" 2>/dev/null || true
+    echo "[setup] Updating submodules..."
+    git submodule update --init --recursive
 fi
 
 mkdir -p "${BUILD_SPACE}"
