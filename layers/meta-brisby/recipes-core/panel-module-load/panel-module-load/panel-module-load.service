@@ -1,0 +1,14 @@
+[Unit]
+Description=Load JD9365DA-H3 panel kernel module before DSI host probes
+DefaultDependencies=no
+Before=balena-supervisor.service
+After=local-fs.target
+ConditionPathExists=/usr/lib/panel/panel-jadard-jd9365da-h3.ko
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/insmod /usr/lib/panel/panel-jadard-jd9365da-h3.ko
+
+[Install]
+WantedBy=sysinit.target

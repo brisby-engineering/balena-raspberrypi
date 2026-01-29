@@ -1,0 +1,103 @@
+/dts-v1/;
+/plugin/;
+
+/*
+ * TXW990002B0 panel on Raspberry Pi CM5 / RP1 DSI0
+ *
+ * Wiring:
+ *   - Reset:     GPIO14, active-low
+ *   - Backlight: GPIO15, active-high
+ *
+ * Driver match:
+ *   - compatible must include: "cw,txw990002b0"
+ */
+
+/{
+	compatible = "brcm,bcm2712";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			panel_vdd: regulator-panel-vdd {
+				compatible = "regulator-fixed";
+				regulator-name = "panel_vdd_3v3";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+			};
+
+			panel_vccio: regulator-panel-vccio {
+				compatible = "regulator-fixed";
+				regulator-name = "panel_vccio";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+			};
+
+			backlight: backlight {
+				compatible = "gpio-backlight";
+				status = "okay";
+				gpios = <&rp1_gpio 15 0>;
+				default-on;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&rp1_dsi0>;
+		__overlay__ {
+			status = "okay";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					rp1_dsi0_out: endpoint {
+						remote-endpoint = <&panel_in>;
+					};
+				};
+			};
+
+			panel@0 {
+				reg = <0>;
+				status = "okay";
+
+				compatible = "cw,txw990002b0";
+
+				vdd-supply = <&panel_vdd>;
+				vccio-supply = <&panel_vccio>;
+
+				reset-gpios = <&rp1_gpio 14 0>;
+
+				dsi,lanes = <4>;
+				dsi,format = <0>; /* MIPI_DSI_FMT_RGB888 */
+
+				backlight = <&backlight>;
+
+				panel-timing {
+					clock-frequency = <78340000>;
+					hactive = <720>;
+					hfront-porch = <30>;
+					hback-porch = <30>;
+					hsync-len = <20>;
+					vactive = <1600>;
+					vfront-porch = <16>;
+					vback-porch = <14>;
+					vsync-len = <2>;
+				};
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&rp1_dsi0_out>;
+					};
+				};
+			};
+		};
+	};
+};
