@@ -88,6 +88,22 @@ if [[ ! -f "${REPO_ROOT}/balena-yocto-scripts/build/balena-build.sh" ]]; then
     exit 1
 fi
 
+# Apply overrides from brisby_extras/overrides/ onto submodules (no need to push to other repos)
+# This way only the fork needs to be cloned; balena-yocto-scripts and poky stay upstream.
+if [[ -d "${BRISBY_EXTRAS}/overrides" ]]; then
+    echo "[brisby] Applying overrides (balena-yocto-scripts, poky)..."
+    [[ -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/entry_scripts/prepare-and-start.sh" ]] && \
+        cp -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/entry_scripts/prepare-and-start.sh" \
+              "${REPO_ROOT}/balena-yocto-scripts/automation/entry_scripts/"
+    [[ -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/include/balena-lib.inc" ]] && \
+        cp -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/include/balena-lib.inc" \
+              "${REPO_ROOT}/balena-yocto-scripts/automation/include/"
+    [[ -f "${BRISBY_EXTRAS}/overrides/poky/meta/classes/sanity.bbclass" ]] && \
+        cp -f "${BRISBY_EXTRAS}/overrides/poky/meta/classes/sanity.bbclass" \
+              "${REPO_ROOT}/layers/poky/meta/classes/"
+    echo "[brisby] Overrides applied."
+fi
+
 # Run containerized build: use meta-brisby templates and add panel packages to image
 echo "[brisby] Starting BalenaOS containerized build for ${DEVICE_TYPE}..."
 echo "[brisby] This can take a long time (tens of GB download + build)."
@@ -100,15 +116,24 @@ if [[ -n "${DRY_RUN}" ]]; then
     exit 0
 fi
 
-# Ensure builder image exists: pull from ghcr.io or build locally (avoids "denied" when unauthenticated)
+# Ensure builder image exists. When we have Brisby overrides for balena-yocto-scripts,
+# build the helper from the repo (so the container uses our GID/UID 0 fix); otherwise pull or build.
 HELPER_REPO="${HELPER_IMAGE_REPO:-ghcr.io/balena-os/balena-yocto-scripts}"
 HELPER_VERSION="$(head -n1 "${REPO_ROOT}/balena-yocto-scripts/VERSION" 2>/dev/null || echo "1.39.19")"
 HELPER_TAG="${HELPER_REPO}:${HELPER_VERSION}-yocto-build-env"
+BRISBY_HELPER_OVERRIDE="${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/entry_scripts/prepare-and-start.sh"
 if [[ -n "${REBUILD_HELPER}" ]]; then
     echo "[brisby] Rebuilding builder image ${HELPER_TAG}..."
     docker rmi "${HELPER_TAG}" 2>/dev/null || true
 fi
-if ! docker image inspect "${HELPER_TAG}" &>/dev/null; then
+if [[ -f "${BRISBY_HELPER_OVERRIDE}" ]]; then
+    # Build helper from repo so it includes our prepare-and-start.sh (GID/UID 0 fix)
+    if ! docker image inspect "${HELPER_TAG}" &>/dev/null || [[ -n "${REBUILD_HELPER}" ]]; then
+        echo "[brisby] Building helper image from repo (includes Brisby overrides)..."
+        ( cd "${REPO_ROOT}/balena-yocto-scripts/automation" && \
+          docker build -f Dockerfile_yocto-build-env -t "${HELPER_TAG}" . )
+    fi
+elif ! docker image inspect "${HELPER_TAG}" &>/dev/null; then
     echo "[brisby] Pulling builder image ${HELPER_TAG}..."
     if ! docker pull "${HELPER_TAG}" 2>/dev/null; then
         echo "[brisby] Pull failed (e.g. ghcr.io denied). Building builder image locally..."
