@@ -133,6 +133,8 @@ if [[ -f "${BRISBY_HELPER_OVERRIDE}" ]]; then
         ( cd "${REPO_ROOT}/balena-yocto-scripts/automation" && \
           docker build -f Dockerfile_yocto-build-env -t "${HELPER_TAG}" . )
     fi
+    # So balena-build.sh does not pull and overwrite our image
+    export BRISBY_USE_LOCAL_HELPER=1
 elif ! docker image inspect "${HELPER_TAG}" &>/dev/null; then
     echo "[brisby] Pulling builder image ${HELPER_TAG}..."
     if ! docker pull "${HELPER_TAG}" 2>/dev/null; then

@@ -65,6 +65,15 @@ balena_lib_docker_pull_helper_image() {
 		_image_tag="${_image_tag}-${_image_variant}"
 	fi
 
+	# When BRISBY_USE_LOCAL_HELPER is set, use the locally built helper (with Brisby overrides); do not pull.
+	if [ -n "${BRISBY_USE_LOCAL_HELPER}" ]; then
+		_image_id="$(docker images --format "{{.ID}}" "${_image_tag}")"
+		if [ -n "${_image_id}" ]; then
+			eval "$_retvalue"='${_image_id}'
+			return 0
+		fi
+	fi
+
 	# Allow pull to fail (e.g. ghcr.io rate limit / denied); use local image if present
 	docker pull "${_image_tag}" || true
 	_image_id="$(docker images --format "{{.ID}}" "${_image_tag}")"
