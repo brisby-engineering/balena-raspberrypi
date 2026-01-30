@@ -17,4 +17,5 @@ do_install() {
 
 FILES:${PN} += "${systemd_system_unitdir}/panel-module-load.service"
 
-RDEPENDS:${PN} = "kernel-module-panel-jd9365da-h3"
+# Package name from kernel-module-split (panel-jadard-jd9365da-h3.ko)
+RDEPENDS:${PN} = "kernel-module-panel-jadard-jd9365da-h3"
