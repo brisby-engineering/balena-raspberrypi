@@ -147,6 +147,8 @@ fi
 # When host is root, the container runs as builder 1000:1000; chown repo and build space so builder can write to /work
 if [ "$(id -u)" = "0" ]; then
     echo "[brisby] Running as root; chown repo and build space to 1000:1000 so container builder can write..."
+    # Add repo to git safe.directory so git commands work after chown (git security check)
+    git config --global --add safe.directory "${REPO_ROOT}" 2>/dev/null || true
     chown -R 1000:1000 "${REPO_ROOT}" "${BUILD_SPACE}"
 fi
 
