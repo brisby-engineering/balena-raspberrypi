@@ -8,3 +8,6 @@ all:
 
 clean:
 	$(MAKE) -C $(KERNEL_DIR) M=$(CURDIR) $(if $(O),O=$(O)) clean
+
+modules_install:
+	$(MAKE) -C $(KERNEL_DIR) M=$(CURDIR) $(if $(O),O=$(O)) modules_install
