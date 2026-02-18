@@ -4,6 +4,8 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171d
 
 inherit deploy
 
+DEPENDS = "dtc-native"
+
 SRC_URI = "file://jd9365da-h3-overlay.dts"
 S = "${WORKDIR}"
 
