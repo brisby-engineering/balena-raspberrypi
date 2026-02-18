@@ -94,6 +94,14 @@ ls /dev/dri/
 - Panel node not found in device tree
 - No panel-related messages in dmesg
 
+#### Issue 1a: Overlay file missing on boot partition
+
+If `ls -la /mnt/boot/overlays/jd9365da-h3.dtbo` shows **No such file or directory** but `grep dtoverlay /mnt/boot/config.txt` shows `jd9365da-h3`, the config asks for the overlay but the overlay binary was never placed on the boot partition. That usually means:
+
+- You are **not** running a custom image built from this repo (meta-brisby). Stock BalenaOS does not include `jd9365da-h3.dtbo`. Setting only `BALENA_HOST_CONFIG_dtoverlay=jd9365da-h3` is not enough; the overlay file must be on the boot partition.
+- **Fix:** Build and flash the **custom BalenaOS image** from this repo (see `brisby_extras/build-brisby-compute5-image.sh` and `LINUX_BUILD_RUNBOOK.md`). The image recipe puts the overlay in the boot partition. After flashing that image, set `BALENA_HOST_CONFIG_dtoverlay` to `jd9365da-h3` and reboot.
+- **Temporary test (if boot partition is writable):** Copy the overlay onto the device, e.g. `scp -P 22222 brisby_custom/overlays/jd9365da-h3.dtbo root@<device>:/mnt/boot/overlays/`, then reboot. The panel node may then appear, but the panel driver still must load (see Issue 2).
+
 **Solutions (BalenaOS):**
 1. Verify overlay file exists: `ls -la /mnt/boot/overlays/jd9365da-h3.dtbo`
 2. **Configure via Balena Cloud** (not direct config.txt editing):
@@ -239,6 +247,51 @@ Overlay defines fixed regulators and GPIO reset. If the panel never powers or re
 
 - Turning backlight up first (5a).
 - Ensuring something is actually using the DSI connector (5b).
+
+#### 5e. fb0 is DSI but screen still black (no splash, no console)
+
+If `ls /sys/class/graphics/fb0` shows fb0 under `.../1f00118000.dsi/...` and `card2-DSI-1` is connected, the framebuffer is the DSI panel but nothing may have set a mode or drawn to it.
+
+**Test 1 – Force a mode (if modetest is available):**
+```bash
+modetest -M drm-rp1-dsi 2>/dev/null || modetest
+# Find the DSI connector id and a mode (e.g. 720x1600), then:
+modetest -M drm-rp1-dsi -s <connector_id>:720x1600
+```
+
+**Test 2 – Write to the framebuffer:** Fill fb0 to see if the panel shows a change (e.g. flash or color). Panel is typically 720×1600 RGB (720×1600×4 bytes per frame). `dd if=/dev/zero of=/dev/fb0 bs=720 count=6400` or similar may show something if the mode is already set.
+
+**Splash / boot logo:** BalenaOS splash may be bound to another DRM card (e.g. card0/HDMI). With `console=null` and only DSI connected, the kernel may still treat card0 as primary. There is no standard Pi 5 cmdline to force DSI as primary; getting the Balena boot screen on the panel may require custom splash configuration or a Balena/device setting that selects the DSI connector.
+
+#### 5f. modetest and dd to fb0 show nothing
+
+If forcing a mode and writing to `/dev/fb0` still give no visible response:
+
+**1. Confirm a mode is actually in use**
+```bash
+cat /sys/class/drm/card2-DSI-1/status
+cat /sys/class/drm/card2-DSI-1/modes
+# If 'modes' is empty or no mode is set, the panel may never be enabled. modetest -s should set one; check dmesg after:
+modetest -M drm-rp1-dsi -s <id>:720x1600
+dmesg | tail -20
+```
+
+**2. Backlight polarity**  
+Some panels need backlight **active-low** (GPIO low = on). The overlay uses `gpios = <&rp1_gpio 15 0>` (active-high). If the panel is active-low, try inverting: in the overlay DTS change to `GPIO_ACTIVE_LOW` (e.g. `gpios = <&rp1_gpio 15 GPIO_ACTIVE_LOW>;`), rebuild the overlay, and reflash. On device you can’t change the overlay; only test by toggling:
+```bash
+echo 0 > /sys/class/backlight/*/brightness
+sleep 1
+echo 1 > /sys/class/backlight/*/brightness
+```
+If the screen briefly appears when you set 0, the backlight may be inverted.
+
+**3. Hardware**  
+- Confirm power (3.3 V) and DSI cable seating.  
+- Confirm GPIO 14 (reset) and 15 (backlight) match your carrier board.  
+- Try another known-good panel or cable if available.
+
+**4. Driver enable sequence**  
+The panel’s `prepare`/`enable` run when a mode is set and the pipeline is committed. If dmesg shows no errors and `rp1dsi_bind succeeded`, the link is up; lack of image with mode set + fb write points to backlight or hardware.
 
 ## Using the Debug Script
 

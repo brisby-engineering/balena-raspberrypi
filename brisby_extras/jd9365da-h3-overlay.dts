@@ -10,6 +10,8 @@
  *
  * Driver match:
  *   - compatible must include: "cw,txw990002b0"
+ *
+ * Verified working on bare-metal Raspberry Pi (e.g. RPi light box) with this config.
  */
 
 /{
