@@ -33,10 +33,11 @@ usage() {
     echo "Build custom BalenaOS image for CM5 with JD9365DA-H3 panel support."
     echo ""
     echo "Options:"
-    echo "  -n, --dry-run       Only prepare build space and meta-brisby; do not run build"
-    echo "  -r, --refresh       Refresh panel/overlay sources from brisby_extras into meta-brisby"
-    echo "  --rebuild-helper    Rebuild the Docker helper image (use if you see groupadd GID errors)"
-    echo "  -h, --help          Show this help"
+    echo "  -n, --dry-run           Only prepare build space and meta-brisby; do not run build"
+    echo "  -r, --refresh           Refresh panel/overlay sources from brisby_extras into meta-brisby"
+    echo "  --cleansstate-kernel   Run only 'bitbake -c cleansstate linux-raspberrypi' (fix pseudo/inode errors), then exit"
+    echo "  --rebuild-helper       Rebuild the Docker helper image (use if you see groupadd GID errors)"
+    echo "  -h, --help             Show this help"
     echo ""
     echo "Output: image and artifacts in ${BUILD_SPACE}/"
     echo ""
@@ -47,14 +48,16 @@ usage() {
 REFRESH_SOURCES=""
 DRY_RUN=""
 REBUILD_HELPER=""
+CLEANSTATE_KERNEL=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -n|--dry-run)       DRY_RUN="1"; shift ;;
-        -r|--refresh)       REFRESH_SOURCES="1"; shift ;;
-        --rebuild-helper)   REBUILD_HELPER="1"; shift ;;
-        -h|--help)          usage ;;
-        *)                  echo "Unknown option: $1"; usage ;;
+        -n|--dry-run)             DRY_RUN="1"; shift ;;
+        -r|--refresh)             REFRESH_SOURCES="1"; shift ;;
+        --cleansstate-kernel)     CLEANSTATE_KERNEL="1"; shift ;;
+        --rebuild-helper)         REBUILD_HELPER="1"; shift ;;
+        -h|--help)                usage ;;
+        *)                        echo "Unknown option: $1"; usage ;;
     esac
 done
 
@@ -153,6 +156,17 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 cd "${REPO_ROOT}"
+if [[ -n "${CLEANSTATE_KERNEL}" ]]; then
+    echo "[brisby] Running only: bitbake -c cleansstate linux-raspberrypi (to fix pseudo/inode path mismatch)"
+    ./balena-yocto-scripts/build/balena-build.sh \
+        -d "${DEVICE_TYPE}" \
+        -s "${BUILD_SPACE}" \
+        -g "-t layers/meta-brisby/conf/samples -a SANITY_SKIP_CASE_INSENSITIVE_FS=1" \
+        -i "linux-raspberrypi" \
+        -b "-c cleansstate"
+    echo "[brisby] Done. Re-run without --cleansstate-kernel to do the full image build."
+    exit 0
+fi
 ./balena-yocto-scripts/build/balena-build.sh \
     -d "${DEVICE_TYPE}" \
     -s "${BUILD_SPACE}" \
