@@ -5,3 +5,6 @@ RPI_KERNEL_DEVICETREE_OVERLAYS:append:raspberrypi5 = " overlays/jd9365da-h3.dtbo
 # 2) Ensure overlay is deployed before boot partition is assembled.
 #    Balena uses do_resin_boot_dirgen_and_deploy (not RPI_SDIMG), so we must depend here.
 do_resin_boot_dirgen_and_deploy[depends] += "${@oe.utils.conditional('MACHINE','raspberrypi5',' jd9365da-overlay:do_deploy','',d)}"
+
+# 3) Explicitly add overlay to Balena boot partition files (BalenaOS uses BALENA_BOOT_PARTITION_FILES, not IMAGE_BOOT_FILES)
+BALENA_BOOT_PARTITION_FILES:append:raspberrypi5 = " jd9365da-h3.dtbo:/overlays/jd9365da-h3.dtbo"
