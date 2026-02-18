@@ -18,6 +18,7 @@
  #include <linux/module.h>
  #include <linux/of.h>
  #include <linux/regulator/consumer.h>
+ #include <linux/slab.h>
  
  struct jadard;
  
@@ -1120,10 +1121,10 @@
      struct jadard *jadard;
      int ret;
  
-     jadard = devm_drm_panel_alloc(dev, struct jadard, panel, &jadard_funcs,
-                       DRM_MODE_CONNECTOR_DSI);
-     if (IS_ERR(jadard))
-         return PTR_ERR(jadard);
+     jadard = devm_kzalloc(dev, sizeof(*jadard), GFP_KERNEL);
+     if (!jadard)
+         return -ENOMEM;
+     drm_panel_init(&jadard->panel, dev, &jadard_funcs, DRM_MODE_CONNECTOR_DSI);
  
      desc = of_device_get_match_data(dev);
      dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
