@@ -17,5 +17,5 @@ do_install() {
 
 FILES:${PN} += "${systemd_system_unitdir}/panel-module-load.service"
 
-# Recipe panel-jd9365da-h3 installs .ko to /usr/lib/panel
+# panel-jd9365da-h3 provides kernel-module-* which installs .ko to /lib/modules/.../updates/
 RDEPENDS:${PN} = "panel-jd9365da-h3"
