@@ -220,6 +220,20 @@ This is why the early-load service is critical. Verify service boot order with:
 systemd-analyze plot > /tmp/boot.svg
 ```
 
+### Issue: Fleet overwrites custom image (host OS update)
+If you flash a **custom** image and add the device to a fleet, Balena can push a **host OS update** so the device matches the fleet’s target OS. That replaces your rootfs and you lose the new panel driver.
+
+**Fix:** The Brisby image includes **prevent-host-os-update**: a service that holds the Balena update lock at boot so the supervisor cannot apply host OS updates. Your custom image then stays in place.
+
+- Service: `prevent-host-os-update.service`
+- It runs before `balena-supervisor` and holds `/tmp/balena/updates.lock`.
+
+If you build with meta-brisby’s sample config, this service is already in the image. After flashing, confirm:
+```bash
+systemctl is-active prevent-host-os-update.service   # should be active
+cat /etc/os-release   # VERSION should reflect your build, not stock 6.10.22+rev1
+```
+
 ## Additional Resources
 
 - Full debugging guide: `DEBUGGING_PANEL.md`

@@ -1,0 +1,12 @@
+[Unit]
+Description=Hold Balena update lock (prevent host OS overwrite of custom image)
+DefaultDependencies=no
+Before=balena-supervisor.service
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/prevent-host-os-update.sh
+
+[Install]
+WantedBy=sysinit.target
