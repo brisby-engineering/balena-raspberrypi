@@ -89,6 +89,23 @@ if [[ ! -f "${META_BRISBY}/conf/layer.conf" ]]; then
     echo "[brisby] ERROR: meta-brisby layer not found at ${META_BRISBY}. Run from balena-raspberrypi repo root."
     exit 1
 fi
+if [[ ! -f "${META_BRISBY}/conf/samples/bblayers.conf.sample" ]]; then
+    echo "[brisby] ERROR: meta-brisby template not found at ${META_BRISBY}/conf/samples/. Need bblayers.conf.sample."
+    exit 1
+fi
+
+# Critical: if build/conf exists but doesn't include meta-brisby, we will build stock. Fail early.
+BUILD_CONF="${REPO_ROOT}/build/conf/bblayers.conf"
+if [[ -f "${BUILD_CONF}" ]]; then
+    if ! grep -q "meta-brisby" "${BUILD_CONF}"; then
+        echo "[brisby] ERROR: build/conf/bblayers.conf exists but does NOT include meta-brisby."
+        echo "[brisby] The build would produce a stock image (no panel, no prevent-host-os-update)."
+        echo "[brisby] Fix: delete build/conf and re-run so the meta-brisby template is used:"
+        echo "  rm -rf ${REPO_ROOT}/build/conf"
+        echo "  $0"
+        exit 1
+    fi
+fi
 if [[ ! -f "${REPO_ROOT}/balena-yocto-scripts/build/balena-build.sh" ]]; then
     echo "[brisby] ERROR: balena-build.sh not found. Run from balena-raspberrypi repo root."
     exit 1
@@ -208,9 +225,10 @@ if [[ -d "${DEPLOY_DIR}" ]]; then
     if [[ -n "${BRISBY_MANIFEST}" ]]; then
         MISSING=""
         grep -q "prevent-host-os-update" "${BRISBY_MANIFEST}" || MISSING="${MISSING} prevent-host-os-update"
-        grep -q "panel-jd9365da-h3\|kernel-module-panel-jadard-jd9365da-h3" "${BRISBY_MANIFEST}" || MISSING="${MISSING} panel-jd9365da-h3"
+        grep -qE "panel-jd9365da-h3|kernel-module-panel-jadard-jd9365da-h3" "${BRISBY_MANIFEST}" || MISSING="${MISSING} panel-jd9365da-h3"
         if [[ -n "${MISSING}" ]]; then
             echo "[brisby] WARNING: image manifest missing expected packages:${MISSING}"
+            echo "[brisby] DO NOT FLASH - this is a stock image. Delete build/conf and rebuild."
             echo "[brisby] Check that meta-brisby balena-image.bbappend IMAGE_INSTALL is applied and rebuild."
         else
             echo "[brisby] Verified: image manifest contains prevent-host-os-update and panel packages."
@@ -222,10 +240,9 @@ if [[ -d "${DEPLOY_DIR}" ]]; then
     echo ""
     echo "[brisby] Done. Flash the image from: ${BUILD_SPACE}"
     echo "[brisby] Set BALENA_HOST_CONFIG_dtoverlay to \"jd9365da-h3\" in Balena Cloud (or config.txt) so the overlay is loaded at boot."
-    # Remind which file is the custom image (must use this, not stock)
-    for f in "${BUILD_SPACE}"/balena-image-*.balenaos-img*; do
-        [[ -e "$f" ]] && echo "[brisby] Custom image to flash: $f" && break
-    done
+    # Remind which file is the custom image (use newest by mtime, not arbitrary glob order)
+    LATEST_IMG=$(ls -t "${BUILD_SPACE}"/balena-image-*.balenaos-img* 2>/dev/null | head -1)
+    [[ -n "${LATEST_IMG}" ]] && echo "[brisby] Custom image to flash: ${LATEST_IMG}"
     echo "[brisby] See brisby_extras/FLASH_VERIFY.md if the device still shows stock OS after flash."
 else
     echo "[brisby] WARNING: deploy dir not found at ${DEPLOY_DIR}. Image path may differ for this device."
