@@ -6,6 +6,14 @@
 - Panel kernel module and overlay included in your custom image
 - SSH access to device (port 22222)
 
+## Build: what gets into the image
+
+The **image recipe** (`layers/meta-brisby/recipes-core/images/balena-image.bbappend`) adds the panel packages and `prevent-host-os-update` to every build that includes meta-brisby. You do not depend on `local.conf.sample` for this. After each build, the script checks the image manifest and prints either "Verified: image manifest contains prevent-host-os-update and panel packages" or a WARNING if any are missing.
+
+## Flashing the custom image
+
+You must flash the **image produced by your build** (from `brisby_extras/build-brisby-compute5-image.sh`), not a stock BalenaOS download. If the device shows VERSION=6.10.22+rev1 and `prevent-host-os-update.service` inactive, it is running stock — see **[brisby_extras/FLASH_VERIFY.md](FLASH_VERIFY.md)** for how to verify and fix.
+
 ## Step 1: Verify Overlay File
 
 ### Connecting to Your Balena Device

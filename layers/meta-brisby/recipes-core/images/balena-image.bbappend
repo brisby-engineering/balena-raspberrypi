@@ -1,3 +1,8 @@
+# meta-brisby: panel (JD9365DA-H3), early-load service, and prevent-host-os-update.
+# These must be in the image recipe so they are always included when this layer is built,
+# regardless of which local.conf.sample was used to create the build dir.
+IMAGE_INSTALL:append = " panel-jd9365da-h3 panel-module-load prevent-host-os-update"
+
 # Add JD9365DA-H3 overlay to boot partition (raspberrypi5 / CM5 only)
 # 1) Add overlay to the list so overlay_dtbs_handler includes it in the boot partition
 RPI_KERNEL_DEVICETREE_OVERLAYS:append:raspberrypi5 = " overlays/jd9365da-h3.dtbo"

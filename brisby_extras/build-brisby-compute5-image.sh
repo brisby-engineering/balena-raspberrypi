@@ -199,9 +199,34 @@ if [[ -d "${DEPLOY_DIR}" ]]; then
         mkdir -p "${BUILD_SPACE}/overlays"
         cp -v "${DEPLOY_DIR}/jd9365da-h3.dtbo" "${BUILD_SPACE}/overlays/"
     fi
+
+    # Verify the built image manifest contains our packages (proof we did not build stock)
+    BRISBY_MANIFEST=""
+    for m in "${DEPLOY_DIR}"/balena-image-*.manifest; do
+        [[ -e "$m" ]] && BRISBY_MANIFEST="$m" && break
+    done
+    if [[ -n "${BRISBY_MANIFEST}" ]]; then
+        MISSING=""
+        grep -q "prevent-host-os-update" "${BRISBY_MANIFEST}" || MISSING="${MISSING} prevent-host-os-update"
+        grep -q "panel-jd9365da-h3\|kernel-module-panel-jadard-jd9365da-h3" "${BRISBY_MANIFEST}" || MISSING="${MISSING} panel-jd9365da-h3"
+        if [[ -n "${MISSING}" ]]; then
+            echo "[brisby] WARNING: image manifest missing expected packages:${MISSING}"
+            echo "[brisby] Check that meta-brisby balena-image.bbappend IMAGE_INSTALL is applied and rebuild."
+        else
+            echo "[brisby] Verified: image manifest contains prevent-host-os-update and panel packages."
+        fi
+    else
+        echo "[brisby] Note: no .manifest found in deploy dir; skipping package verification."
+    fi
+
     echo ""
     echo "[brisby] Done. Flash the image from: ${BUILD_SPACE}"
     echo "[brisby] Set BALENA_HOST_CONFIG_dtoverlay to \"jd9365da-h3\" in Balena Cloud (or config.txt) so the overlay is loaded at boot."
+    # Remind which file is the custom image (must use this, not stock)
+    for f in "${BUILD_SPACE}"/balena-image-*.balenaos-img*; do
+        [[ -e "$f" ]] && echo "[brisby] Custom image to flash: $f" && break
+    done
+    echo "[brisby] See brisby_extras/FLASH_VERIFY.md if the device still shows stock OS after flash."
 else
     echo "[brisby] WARNING: deploy dir not found at ${DEPLOY_DIR}. Image path may differ for this device."
 fi

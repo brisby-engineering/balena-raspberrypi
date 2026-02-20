@@ -107,9 +107,8 @@ LICENSE_FLAGS_ACCEPTED = "synaptics-killswitch"
 # CycloneDX SBOM disabled for brisby build (avoids do_populate_cyclonedx failures on case-insensitive /work in Docker on macOS)
 # INHERIT += "cyclonedx-export"
 
-# meta-brisby: panel module and early-load service for JD9365DA-H3 (CM5)
-# panel-jd9365da-h3 pulls in kernel-module-* which installs .ko to /lib/modules/.../updates/
-# prevent-host-os-update: hold Balena update lock so fleet cannot overwrite this custom image with host OS update
+# meta-brisby: same packages as in recipes-core/images/balena-image.bbappend (recipe is source of truth).
+# This template ensures a fresh build dir gets them; the bbappend guarantees they are in the image either way.
 IMAGE_INSTALL:append = " panel-jd9365da-h3 panel-module-load prevent-host-os-update"
 
 # Allow TMPDIR on case-insensitive filesystem (required when building in Docker on macOS; /work is the host repo)
