@@ -74,7 +74,9 @@ if [[ ! -d "${BUILD_SPACE}" ]]; then
     mkdir -p "${BUILD_SPACE}"
 fi
 
-# Optional: refresh panel and overlay sources from brisby_extras into meta-brisby
+# Optional: refresh panel and overlay sources from brisby_extras into meta-brisby.
+# Canonical source for bare metal is casco-web (deploy-overlay.sh / deploy-panel-module.sh).
+# This copies overlay .dts and panel .c only; do NOT copy the casco-web Makefile (recipe uses Yocto KERNEL_DIR).
 if [[ -n "${REFRESH_SOURCES}" ]]; then
     echo "[brisby] Refreshing panel and overlay sources from brisby_extras..."
     cp -f "${BRISBY_EXTRAS}/panel-jadard-jd9365da-h3.c" \
