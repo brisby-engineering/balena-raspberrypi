@@ -12,4 +12,6 @@ CMDLINE += " cgroup_enable=memory"
 CMDLINE:remove = "root=/dev/mmcblk0p2"
 CMDLINE_DEBUG = ""
 
-CMDLINE:append:raspberrypi5 := " balena_stage2 maxcpus=0"
+# Enable framebuffer console on DSI/HDMI for boot text and splash (override production console=null)
+CMDLINE:remove:raspberrypi5 = " vt.global_cursor_default=0 console=null"
+CMDLINE:append:raspberrypi5 = " balena_stage2 maxcpus=0 console=tty1"

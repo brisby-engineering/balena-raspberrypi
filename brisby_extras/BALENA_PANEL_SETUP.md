@@ -1,5 +1,14 @@
 # Quick Setup Guide: JD9365DA-H3 Panel on BalenaOS
 
+## Source of driver and overlay
+
+The panel kernel driver and overlay DTS used in this image are the **same sources** as used on bare-metal Trixie (casco-web): the working setup from `deploy-overlay.sh` and `deploy-panel-module.sh` in casco-web. They are copied into meta-brisby recipe `files/` and built into the image:
+
+- **Overlay:** `layers/meta-brisby/recipes-bsp/jd9365da-overlay/files/jd9365da-h3-overlay.dts` (compiled to `jd9365da-h3.dtbo` on the boot partition).
+- **Panel driver:** `layers/meta-brisby/recipes-kernel/panel-jd9365da/files/panel-jadard-jd9365da-h3.c` (built as a kernel module; the recipe **Makefile** stays the Yocto one — do not copy the casco-web Makefile).
+
+To keep in sync with bare metal, update these recipe files from casco-web (overlay `.dts` and panel `.c` only) when the reference changes, or use the build script’s **REFRESH_SOURCES** option to copy from `brisby_extras` (which you may keep in sync with casco-web).
+
 ## Prerequisites
 
 - Raspberry Pi 5 or Compute Module 5 running BalenaOS
@@ -8,7 +17,7 @@
 
 ## Build: what gets into the image
 
-The **image recipe** (`layers/meta-brisby/recipes-core/images/balena-image.bbappend`) adds the panel packages and `prevent-host-os-update` to every build that includes meta-brisby. You do not depend on `local.conf.sample` for this. After each build, the script checks the image manifest and prints either "Verified: image manifest contains prevent-host-os-update and panel packages" or a WARNING if any are missing.
+The **image recipe** (`layers/meta-brisby/recipes-core/images/balena-image.bbappend`) adds the panel packages and `prevent-host-os-update` to every build that includes meta-brisby. You do not depend on `local.conf.sample` for this. After each build, the script checks the image manifest and prints either "Verified: image manifest contains prevent-host-os-update and panel packages" or a WARNING if any are missing. **If you see the WARNING** (manifest missing packages), the build used a conf that didn’t include meta-brisby (e.g. leftover from a previous stock build). Fix: from the repo root run `rm -rf build/conf` then re-run the build script; it will re-create conf from the meta-brisby template.
 
 ## Flashing the custom image
 

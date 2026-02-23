@@ -37,7 +37,6 @@ usage() {
     echo "  -r, --refresh           Refresh panel/overlay sources from brisby_extras into meta-brisby"
     echo "  --cleansstate-kernel   Run only 'bitbake -c cleansstate linux-raspberrypi' (fix pseudo/inode errors), then exit"
     echo "  --cleansstate-panel    Clean sstate cache for panel-jd9365da-h3 to force rebuild with new driver"
-    echo "  --clean-conf           Pre-cleanup: always remove build/conf so template is re-applied (guarantees meta-brisby)"
     echo "  --rebuild-helper       Rebuild the Docker helper image (use if you see groupadd GID errors)"
     echo "  -h, --help             Show this help"
     echo ""
@@ -52,7 +51,6 @@ DRY_RUN=""
 REBUILD_HELPER=""
 CLEANSTATE_KERNEL=""
 CLEANSTATE_PANEL=""
-CLEAN_CONF=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -60,7 +58,6 @@ while [[ $# -gt 0 ]]; do
         -r|--refresh)             REFRESH_SOURCES="1"; shift ;;
         --cleansstate-kernel)     CLEANSTATE_KERNEL="1"; shift ;;
         --cleansstate-panel)      CLEANSTATE_PANEL="1"; shift ;;
-        --clean-conf)             CLEAN_CONF="1"; shift ;;
         --rebuild-helper)         REBUILD_HELPER="1"; shift ;;
         -h|--help)                usage ;;
         *)                        echo "Unknown option: $1"; usage ;;
@@ -71,18 +68,13 @@ echo "[brisby] Repo root: ${REPO_ROOT}"
 echo "[brisby] Build space: ${BUILD_SPACE}"
 echo ""
 
-# --- Pre-cleanup: ensure the system is ready for building ---
-echo "[brisby] Pre-cleanup: ensuring build environment is ready..."
-
-# Ensure build space exists (for shared-downloads, sstate, and artifact copy)
+# Ensure build space exists
 if [[ ! -d "${BUILD_SPACE}" ]]; then
     echo "[brisby] Creating build space: ${BUILD_SPACE}"
     mkdir -p "${BUILD_SPACE}"
 fi
 
-# Optional: refresh panel and overlay sources from brisby_extras into meta-brisby.
-# Canonical source for bare metal is casco-web (deploy-overlay.sh / deploy-panel-module.sh).
-# This copies overlay .dts and panel .c only; do NOT copy the casco-web Makefile (recipe uses Yocto KERNEL_DIR).
+# Optional: refresh panel and overlay sources from brisby_extras into meta-brisby
 if [[ -n "${REFRESH_SOURCES}" ]]; then
     echo "[brisby] Refreshing panel and overlay sources from brisby_extras..."
     cp -f "${BRISBY_EXTRAS}/panel-jadard-jd9365da-h3.c" \
@@ -92,7 +84,7 @@ if [[ -n "${REFRESH_SOURCES}" ]]; then
     echo "[brisby] Sources updated."
 fi
 
-# Sanity checks: meta-brisby layer and template must exist
+# Sanity checks
 if [[ ! -f "${META_BRISBY}/conf/layer.conf" ]]; then
     echo "[brisby] ERROR: meta-brisby layer not found at ${META_BRISBY}. Run from balena-raspberrypi repo root."
     exit 1
@@ -101,28 +93,23 @@ if [[ ! -f "${META_BRISBY}/conf/samples/bblayers.conf.sample" ]]; then
     echo "[brisby] ERROR: meta-brisby template not found at ${META_BRISBY}/conf/samples/. Need bblayers.conf.sample."
     exit 1
 fi
+
+# Critical: if build/conf exists but doesn't include meta-brisby, we will build stock. Fail early.
+BUILD_CONF="${REPO_ROOT}/build/conf/bblayers.conf"
+if [[ -f "${BUILD_CONF}" ]]; then
+    if ! grep -q "meta-brisby" "${BUILD_CONF}"; then
+        echo "[brisby] ERROR: build/conf/bblayers.conf exists but does NOT include meta-brisby."
+        echo "[brisby] The build would produce a stock image (no panel, no prevent-host-os-update)."
+        echo "[brisby] Fix: delete build/conf and re-run so the meta-brisby template is used:"
+        echo "  rm -rf ${REPO_ROOT}/build/conf"
+        echo "  $0"
+        exit 1
+    fi
+fi
 if [[ ! -f "${REPO_ROOT}/balena-yocto-scripts/build/balena-build.sh" ]]; then
     echo "[brisby] ERROR: balena-build.sh not found. Run from balena-raspberrypi repo root."
     exit 1
 fi
-
-# Ensure build/conf will use meta-brisby template. Yocto only copies the template when conf is first created.
-# Remove build/conf if: (1) user asked --clean-conf, or (2) conf exists but doesn't list meta-brisby (stale stock conf).
-BUILD_CONF="${REPO_ROOT}/build/conf/bblayers.conf"
-if [[ -n "${CLEAN_CONF}" ]]; then
-    if [[ -d "${REPO_ROOT}/build/conf" ]]; then
-        echo "[brisby] Removing build/conf (--clean-conf)."
-        rm -rf "${REPO_ROOT}/build/conf"
-    fi
-elif [[ -f "${BUILD_CONF}" ]]; then
-    if ! grep -q "meta-brisby" "${BUILD_CONF}"; then
-        echo "[brisby] Removing stale build/conf (missing meta-brisby; would produce stock image)."
-        rm -rf "${REPO_ROOT}/build/conf"
-    fi
-fi
-
-echo "[brisby] Pre-cleanup done."
-echo ""
 
 # Apply overrides from brisby_extras/overrides/ onto submodules (no need to push to other repos)
 # This way only the fork needs to be cloned; balena-yocto-scripts and poky stay upstream.
@@ -241,8 +228,8 @@ if [[ -d "${DEPLOY_DIR}" ]]; then
         grep -qE "panel-jd9365da-h3|kernel-module-panel-jadard-jd9365da-h3" "${BRISBY_MANIFEST}" || MISSING="${MISSING} panel-jd9365da-h3"
         if [[ -n "${MISSING}" ]]; then
             echo "[brisby] WARNING: image manifest missing expected packages:${MISSING}"
-            echo "[brisby] DO NOT FLASH - this is a stock image."
-            echo "[brisby] Fix: rm -rf build/conf && $0   (script will re-create conf from meta-brisby template)"
+            echo "[brisby] DO NOT FLASH - this is a stock image. Delete build/conf and rebuild."
+            echo "[brisby] Check that meta-brisby balena-image.bbappend IMAGE_INSTALL is applied and rebuild."
         else
             echo "[brisby] Verified: image manifest contains prevent-host-os-update and panel packages."
         fi

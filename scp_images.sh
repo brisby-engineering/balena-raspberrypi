@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SCP script to sync balena images from remote server
-# Downloads all missing images and always downloads the main image
+# Always downloads balena-image-raspberrypi5.balenaos-img; also the most recent other .balenaos-img if not already local.
 
 REMOTE_HOST="root@64.225.54.68"
 REMOTE_PATH="/root/brisby_custom"
@@ -26,11 +26,11 @@ if [ ! -d "$LOCAL_DIR" ]; then
     exit 1
 fi
 
-# Get list of remote files
-echo "Fetching remote file list..."
-REMOTE_FILES=$(ssh ${REMOTE_HOST} "ls -1 ${REMOTE_PATH}/${REMOTE_PATTERN} 2>/dev/null" | xargs -n1 basename)
+# Get remote files sorted by modification time (newest first)
+echo "Fetching remote file list (by modification time)..."
+REMOTE_FILES_BY_TIME=$(ssh ${REMOTE_HOST} "ls -t ${REMOTE_PATH}/${REMOTE_PATTERN} 2>/dev/null" | xargs -n1 basename)
 
-if [ -z "$REMOTE_FILES" ]; then
+if [ -z "$REMOTE_FILES_BY_TIME" ]; then
     echo -e "${YELLOW}Warning: No remote files found matching pattern ${REMOTE_PATTERN}${NC}"
     exit 1
 fi
@@ -40,47 +40,53 @@ LOCAL_FILES_BALENA=$(ls -1 "${LOCAL_DIR}"/*.balenaos-img 2>/dev/null | xargs -n1
 LOCAL_FILES_IMG=$(ls -1 "${LOCAL_DIR}"/*.img 2>/dev/null | xargs -n1 basename | sed 's/\.img$/.balenaos-img/')
 LOCAL_FILES=$(echo -e "${LOCAL_FILES_BALENA}\n${LOCAL_FILES_IMG}" | grep -v '^$' | sort -u)
 
-echo "Found $(echo "$REMOTE_FILES" | wc -l | tr -d ' ') remote file(s)"
-echo "Found $(echo "$LOCAL_FILES" | wc -l | tr -d ' ') local file(s)"
-echo ""
+# Helper: already have this file locally?
+have_locally() {
+    local f="$1"
+    echo "$LOCAL_FILES" | grep -q "^${f}$"
+}
 
-# Find missing files
-MISSING_FILES=""
+# Build download list: always MAIN_FILE (if on remote) + most recent *other* file only if missing locally
 FILES_TO_DOWNLOAD=""
 
-for remote_file in $REMOTE_FILES; do
-    if ! echo "$LOCAL_FILES" | grep -q "^${remote_file}$"; then
-        MISSING_FILES="${MISSING_FILES}${remote_file}"$'\n'
-        FILES_TO_DOWNLOAD="${FILES_TO_DOWNLOAD}${remote_file}"$'\n'
-    fi
-done
-
-# Always add main file to download list (even if it exists locally)
-if echo "$REMOTE_FILES" | grep -q "^${MAIN_FILE}$"; then
-    if ! echo "$FILES_TO_DOWNLOAD" | grep -q "^${MAIN_FILE}$"; then
-        FILES_TO_DOWNLOAD="${FILES_TO_DOWNLOAD}${MAIN_FILE}"$'\n'
-    fi
-    echo -e "${YELLOW}Main file (${MAIN_FILE}) will always be downloaded${NC}"
+# 1) Main file — always add when on remote (always re-download to get latest)
+if echo "$REMOTE_FILES_BY_TIME" | grep -q "^${MAIN_FILE}$"; then
+    FILES_TO_DOWNLOAD="${FILES_TO_DOWNLOAD}${MAIN_FILE}"$'\n'
 else
     echo -e "${RED}Warning: Main file (${MAIN_FILE}) not found on remote server${NC}"
 fi
 
-# Remove empty lines and duplicates
-FILES_TO_DOWNLOAD=$(echo "$FILES_TO_DOWNLOAD" | grep -v '^$' | sort -u)
+# 2) Most recent *other* file (first in time-sorted list that is not MAIN_FILE)
+MOST_RECENT_OTHER=""
+for f in $REMOTE_FILES_BY_TIME; do
+    if [ "$f" != "$MAIN_FILE" ]; then
+        MOST_RECENT_OTHER="$f"
+        break
+    fi
+done
+if [ -n "$MOST_RECENT_OTHER" ] && ! have_locally "$MOST_RECENT_OTHER"; then
+    FILES_TO_DOWNLOAD="${FILES_TO_DOWNLOAD}${MOST_RECENT_OTHER}"$'\n'
+fi
+
+# Remove empty lines
+FILES_TO_DOWNLOAD=$(echo "$FILES_TO_DOWNLOAD" | grep -v '^$')
+
+echo "Remote files (newest first): $(echo $REMOTE_FILES_BY_TIME | tr '\n' ' ')"
+echo "Local files: $(echo $LOCAL_FILES | tr '\n' ' ')"
+echo ""
 
 if [ -z "$FILES_TO_DOWNLOAD" ]; then
-    echo -e "${GREEN}All files are already synced locally!${NC}"
+    echo -e "${GREEN}Main image and most recent other are already synced locally. Nothing to download.${NC}"
     exit 0
 fi
 
 # Display files to download
-echo ""
 echo "Files to download:"
 echo "$FILES_TO_DOWNLOAD" | while read -r file; do
     if [ "$file" == "$MAIN_FILE" ]; then
         echo -e "  ${GREEN}* ${file} (main file)${NC}"
     else
-        echo -e "  ${YELLOW}  ${file} (missing)${NC}"
+        echo -e "  ${YELLOW}  ${file} (most recent other)${NC}"
     fi
 done
 

@@ -102,3 +102,8 @@ do_deploy:append:raspberrypi4() {
 otg_mode=1
 EOF
 }
+
+# Enable firmware splash for raspberrypi5 (DSI/display builds) - allows early boot splash before kernel
+do_deploy:append:raspberrypi5() {
+	sed -i 's/disable_splash=1/disable_splash=0/' ${DEPLOYDIR}/bootfiles/config.txt
+}
