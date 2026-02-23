@@ -74,7 +74,34 @@ grep -a "mipi_dsi.*multi" $(modinfo -n panel-jadard-jd9365da-h3) && echo "NEW dr
 
 ---
 
-## 4. Quick "am I on the right image?" check
+## 4. Where is the panel diagnostic script? (on device)
+
+- **Build-host “diagnose”** (checks why the *build* might produce stock image): run on your **build machine**, not on the device:
+  ```bash
+  ./brisby_extras/build-brisby-compute5-image.sh --diagnose
+  ```
+- **On-device panel check** (driver, overlay, DSI, dmesg): only present if the **custom** image is flashed. On the device it is installed at:
+  ```text
+  /usr/bin/check-panel-on-device.sh
+  ```
+  So over SSH on the device run:
+  ```bash
+  /usr/bin/check-panel-on-device.sh
+  ```
+  or (if `/usr/bin` is in PATH):
+  ```bash
+  check-panel-on-device.sh
+  ```
+- **If that file is missing** on the device, the device is almost certainly running the **stock** image (our image installs this script). Re-flash with the custom image from your build. To still run the same panel diagnostic, run it **from your Mac/laptop** and pipe it to the device:
+  ```bash
+  # From repo root on your machine (run against the device over SSH)
+  balena ssh <device> 'sh -s' < brisby_extras/check-panel-on-device.sh
+  ```
+  Or with regular SSH: `ssh root@<device> -p 22222 'sh -s' < brisby_extras/check-panel-on-device.sh`
+
+---
+
+## 5. Quick "am I on the right image?" check
 
 ```bash
 # One-liner: custom image has this script and (usually) our service enabled
@@ -85,7 +112,7 @@ If you see "NOT custom image", you are still flashing the wrong file; use the cu
 
 ---
 
-## 5. Build script reminder
+## 6. Build script reminder
 
 After a successful build, the script prints:
 
@@ -94,3 +121,28 @@ After a successful build, the script prints:
 ```
 
 Use that exact file for flashing. See `brisby_extras/FLASH_VERIFY.md` if the device still shows stock OS after flash.
+
+---
+
+## 7. Screen still not working after flash
+
+1. **Confirm custom image is on the device** (see §5):  
+   `test -f /usr/libexec/prevent-host-os-update.sh && echo custom || echo stock`  
+   If "stock", re-flash with the image from your build.
+
+2. **Run the panel diagnostic** (from device if script exists, otherwise from host):
+   - On device: `/usr/bin/check-panel-on-device.sh`
+   - From host: `balena ssh <device> 'sh -s' < brisby_extras/check-panel-on-device.sh`
+   Check the output: driver present, module loaded, overlay in config.txt, overlay file on boot, dmesg for panel/DSI.
+
+3. **Ensure overlay is enabled**: In Balena Cloud → Fleet → Device → Device configuration, set  
+   `BALENA_HOST_CONFIG_dtoverlay` = `jd9365da-h3`  
+   (or on device: add `dtoverlay=jd9365da-h3` to `/mnt/boot/config.txt` and reboot).
+
+4. **Hardware**: Correct DSI connector and cable for your panel; panel powered; backlight if separate.
+
+**If dmesg shows `rp1dsi_bind succeeded` but the screen stays black:**  
+- The kernel and panel have bound; the usual cause is **backlight**. The overlay uses `gpio-backlight` on GPIO15. On device run the diagnostic again (it now includes section 8b Backlight). If a backlight device exists and `brightness` is 0, try:  
+  `echo $(cat /sys/class/backlight/*/max_brightness) > /sys/class/backlight/*/brightness`  
+  (replace `*` with the actual device name if needed).  
+- On Pi5, the DSI display can be **card1** (HDMI is card0). The diagnostic now lists all DRM cards. If you need to force output to the panel, you may need to use the correct DRM device/card.

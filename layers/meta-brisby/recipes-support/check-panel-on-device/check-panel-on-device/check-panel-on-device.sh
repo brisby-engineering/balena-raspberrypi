@@ -71,7 +71,7 @@ find /proc/device-tree -type d -name "*txw990002b0*" 2>/dev/null | head -5
 if find /proc/device-tree -type f -name "compatible" -exec grep -l "cw,txw990002b0" {} \; 2>/dev/null | head -1 | grep -q .; then
     echo "   [OK] panel node with cw,txw990002b0 found"
 else
-    echo "   [MISSING?] no panel node with cw,txw990002b0 - overlay may not be loaded"
+    echo "   [MISSING?] no panel node with cw,txw990002b0 in /proc/device-tree (if dmesg shows rp1dsi_bind succeeded, overlay is applied)"
 fi
 echo ""
 
@@ -81,11 +81,31 @@ ls -la /sys/bus/platform/drivers/rp1-dsi/ 2>/dev/null || echo "   (rp1-dsi drive
 ls -la /sys/bus/platform/devices/*dsi* 2>/dev/null | head -5
 echo ""
 
-# --- 8. DRM / KMS ---
-echo "8. DRM connectors (card0):"
-for c in /sys/class/drm/card0-*; do
-    [ -d "$c" ] && [ -f "$c/status" ] && echo "   $(basename $c): $(cat $c/status 2>/dev/null)"
+# --- 8. DRM / KMS (all cards; Pi5 DSI can be card1) ---
+echo "8. DRM connectors (all cards):"
+for card in /sys/class/drm/card[0-9]*; do
+    [ -d "$card" ] || continue
+    base=$(basename "$card")
+    echo "   --- $base ---"
+    for c in "${card}"-*; do
+        [ -d "$c" ] && [ -f "$c/status" ] && echo "   $(basename $c): $(cat $c/status 2>/dev/null)"
+    done 2>/dev/null
 done 2>/dev/null
+echo ""
+
+# --- 8b. Backlight (if 0, screen can be black) ---
+echo "8b. Backlight:"
+for bl in /sys/class/backlight/*; do
+    [ -d "$bl" ] || continue
+    name=$(basename "$bl")
+    max=$(cat "$bl/max_brightness" 2>/dev/null)
+    cur=$(cat "$bl/brightness" 2>/dev/null)
+    echo "   $name: brightness=$cur max_brightness=$max"
+    if [ -n "$cur" ] && [ -n "$max" ] && [ "$cur" = "0" ] && [ "$max" != "0" ]; then
+        echo "   [TIP] Backlight is 0 - try: echo $max > $bl/brightness"
+    fi
+done 2>/dev/null
+[ ! -d /sys/class/backlight ] || [ -z "$(ls -A /sys/class/backlight 2>/dev/null)" ] && echo "   (no backlight sysfs - overlay uses gpio-backlight on GPIO15)"
 echo ""
 
 # --- 9. panel-module-load service ---
