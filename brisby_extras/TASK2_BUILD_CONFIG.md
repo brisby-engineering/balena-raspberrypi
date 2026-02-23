@@ -24,6 +24,11 @@
   ```
 - **oe-init-build-env** (from Poky) creates `build/conf/local.conf` and `build/conf/bblayers.conf` **only when they do not exist**. It copies from the templates in `TEMPLATECONF`.
 
+### Where is build/conf?
+
+- The Yocto build directory is **always** `REPO_ROOT/build` (e.g. `/root/balena-raspberrypi/build` on the build server).
+- `balena-build.sh -s` only provides the **shared** directories (shared-downloads, shared-sstate) under `BRISBY_BUILD_SPACE`; it does **not** move the build dir. So `build/conf` is under the repo, not under `BRISBY_BUILD_SPACE`.
+
 ### When is local.conf / bblayers.conf Created?
 
 - **First run** (no `build/conf/`): Templates are copied. Our meta-brisby template provides:
@@ -42,10 +47,10 @@
 3. `balena-image.bbappend` in meta-brisby is **never applied**.
 4. The image will be **stock** (no panel-jd9365da-h3, no prevent-host-os-update).
 
-**Recommendation:** If you suspect a stale build, delete `build/conf` and re-run the build script so that `oe-init-build-env` recreates conf from the meta-brisby template:
+**Recommendation:** If you suspect a stale build, run the build script with `--clean-config` (then build without it). This removes `build/conf` in both the repo and the build space so the next run recreates conf from the meta-brisby template:
 
 ```bash
-rm -rf build/conf
+./brisby_extras/build-brisby-compute5-image.sh --clean-config
 ./brisby_extras/build-brisby-compute5-image.sh
 ```
 

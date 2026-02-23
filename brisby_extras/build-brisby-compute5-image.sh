@@ -39,6 +39,7 @@ usage() {
     echo "  --cleansstate-kernel   Run only 'bitbake -c cleansstate linux-raspberrypi' (fix pseudo/inode errors), then exit"
     echo "  --cleansstate-panel    Clean sstate cache for panel-jd9365da-h3 to force rebuild with new driver"
     echo "  --rebuild-helper       Rebuild the Docker helper image (use if you see groupadd GID errors)"
+    echo "  --diagnose             Check why build might produce stock image (template, bblayers, paths); then exit"
     echo "  -h, --help             Show this help"
     echo ""
     echo "Output: image and artifacts in ${BUILD_SPACE}/"
@@ -53,6 +54,7 @@ REBUILD_HELPER=""
 CLEANSTATE_KERNEL=""
 CLEANSTATE_PANEL=""
 CLEAN_CONFIG=""
+DIAGNOSE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -62,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --cleansstate-kernel)     CLEANSTATE_KERNEL="1"; shift ;;
         --cleansstate-panel)      CLEANSTATE_PANEL="1"; shift ;;
         --rebuild-helper)         REBUILD_HELPER="1"; shift ;;
+        --diagnose)               DIAGNOSE="1"; shift ;;
         -h|--help)                usage ;;
         *)                        echo "Unknown option: $1"; usage ;;
     esac
@@ -77,7 +80,8 @@ if [[ ! -d "${BUILD_SPACE}" ]]; then
     mkdir -p "${BUILD_SPACE}"
 fi
 
-# Optional: clean build config (fixes stock image when meta-brisby was not in bblayers)
+# Optional: clean build config (fixes stock image when meta-brisby was not in bblayers).
+# Yocto uses REPO_ROOT/build; we also clean BUILD_SPACE/build/conf if present.
 if [[ -n "${CLEAN_CONFIG}" ]]; then
     echo "[brisby] Cleaning build config..."
     for conf_dir in "${REPO_ROOT}/build/conf" "${BUILD_SPACE}/build/conf"; do
@@ -86,7 +90,8 @@ if [[ -n "${CLEAN_CONFIG}" ]]; then
             echo "[brisby] Removed ${conf_dir}"
         fi
     done
-    echo "[brisby] Config cleaned. Re-run without --clean-config to build."
+    echo "[brisby] Config cleaned. Re-run without --clean-config to build:"
+    echo "[brisby]   $0"
     exit 0
 fi
 
@@ -111,17 +116,61 @@ if [[ ! -f "${META_BRISBY}/conf/samples/bblayers.conf.sample" ]]; then
 fi
 
 # Critical: if build/conf exists but doesn't include meta-brisby, we will build stock. Fail early.
-BUILD_CONF="${REPO_ROOT}/build/conf/bblayers.conf"
-if [[ -f "${BUILD_CONF}" ]]; then
-    if ! grep -q "meta-brisby" "${BUILD_CONF}"; then
-        echo "[brisby] ERROR: build/conf/bblayers.conf exists but does NOT include meta-brisby."
-        echo "[brisby] The build would produce a stock image (no panel, no prevent-host-os-update)."
-        echo "[brisby] Fix: delete build/conf and re-run so the meta-brisby template is used:"
-        echo "  rm -rf ${REPO_ROOT}/build/conf"
-        echo "  $0"
-        exit 1
+# Note: Yocto build dir is always REPO_ROOT/build (balena-build.sh -s only provides shared-downloads/sstate).
+BUILD_CONF_REPO="${REPO_ROOT}/build/conf/bblayers.conf"
+BUILD_CONF_SPACE="${BUILD_SPACE}/build/conf/bblayers.conf"
+for BUILD_CONF in "${BUILD_CONF_REPO}" "${BUILD_CONF_SPACE}"; do
+    if [[ -f "${BUILD_CONF}" ]]; then
+        if ! grep -q "meta-brisby" "${BUILD_CONF}"; then
+            echo "[brisby] ERROR: bblayers.conf exists but does NOT include meta-brisby: ${BUILD_CONF}"
+            echo "[brisby] The build would produce a stock image (no panel, no prevent-host-os-update)."
+            echo "[brisby] Fix: run with --clean-config then build (no options):"
+            echo "  $0 --clean-config"
+            echo "  $0"
+            exit 1
+        fi
     fi
+done
+
+if [[ -n "${DIAGNOSE}" ]]; then
+    echo "[brisby] === Diagnose: why build might produce stock image ==="
+    echo "[brisby] Repo root:        ${REPO_ROOT}"
+    echo "[brisby] Build space:      ${BUILD_SPACE}"
+    echo "[brisby] Yocto build dir:  ${REPO_ROOT}/build (used by barys in container)"
+    echo "[brisby] Deploy dir:       ${REPO_ROOT}/build/${DEPLOY_SUBDIR}"
+    echo ""
+    TEMPLATE_DIR="${REPO_ROOT}/layers/meta-brisby/conf/samples"
+    if [[ -f "${TEMPLATE_DIR}/bblayers.conf.sample" ]]; then
+        echo "[brisby] Template: ${TEMPLATE_DIR}/bblayers.conf.sample exists."
+        if grep -q "meta-brisby" "${TEMPLATE_DIR}/bblayers.conf.sample"; then
+            echo "[brisby]   Template includes meta-brisby in BBLAYERS."
+        else
+            echo "[brisby]   WARNING: template does NOT include meta-brisby."
+        fi
+    else
+        echo "[brisby] WARNING: Template not found at ${TEMPLATE_DIR}/bblayers.conf.sample"
+        echo "[brisby]   Container resolves -t layers/meta-brisby/conf/samples to this path."
+    fi
+    echo ""
+    if [[ -f "${BUILD_CONF_REPO}" ]]; then
+        echo "[brisby] Current build/conf: ${BUILD_CONF_REPO} exists."
+        if grep -q "meta-brisby" "${BUILD_CONF_REPO}"; then
+            echo "[brisby]   bblayers.conf includes meta-brisby (next build should be custom)."
+        else
+            echo "[brisby]   bblayers.conf does NOT include meta-brisby -> stock image. Run --clean-config then build."
+        fi
+    else
+        echo "[brisby] No build/conf yet; next build will create it from template (good if template is meta-brisby)."
+    fi
+    echo ""
+    echo "[brisby] Other possibilities if clean build still gives stock image:"
+    echo "[brisby]   - meta-brisby missing on build host (different clone/worktree)"
+    echo "[brisby]   - Template path (-t) not passed into container (check -g in script)"
+    echo "[brisby]   - Build ran from different repo than this script (REPO_ROOT vs /work in Docker)"
+    echo "[brisby] See: brisby_extras/TROUBLESHOOT_STOCK_IMAGE.md"
+    exit 0
 fi
+
 if [[ ! -f "${REPO_ROOT}/balena-yocto-scripts/build/balena-build.sh" ]]; then
     echo "[brisby] ERROR: balena-build.sh not found. Run from balena-raspberrypi repo root."
     exit 1
@@ -240,24 +289,31 @@ if [[ -d "${DEPLOY_DIR}" ]]; then
         cp -v "${DEPLOY_DIR}/jd9365da-h3.dtbo" "${BUILD_SPACE}/overlays/"
     fi
 
-    # Verify the built image manifest contains our packages (proof we did not build stock)
+    # Verify the built image manifest contains our packages (proof we did not build stock).
+    # Use newest manifest by mtime so we check the image we just built (deploy dir may have older files).
     BRISBY_MANIFEST=""
     for m in "${DEPLOY_DIR}"/balena-image-*.manifest; do
-        [[ -e "$m" ]] && BRISBY_MANIFEST="$m" && break
+        [[ -e "$m" ]] || continue
+        if [[ -z "${BRISBY_MANIFEST}" ]] || [[ "$m" -nt "${BRISBY_MANIFEST}" ]]; then
+            BRISBY_MANIFEST="$m"
+        fi
     done
-    if [[ -n "${BRISBY_MANIFEST}" ]]; then
+    if [[ -n "${BRISBY_MANIFEST}" ]] && [[ -f "${BRISBY_MANIFEST}" ]]; then
         MISSING=""
         grep -q "prevent-host-os-update" "${BRISBY_MANIFEST}" || MISSING="${MISSING} prevent-host-os-update"
         grep -qE "panel-jd9365da-h3|kernel-module-panel-jadard-jd9365da-h3" "${BRISBY_MANIFEST}" || MISSING="${MISSING} panel-jd9365da-h3"
         if [[ -n "${MISSING}" ]]; then
             echo "[brisby] WARNING: image manifest missing expected packages:${MISSING}"
-            echo "[brisby] DO NOT FLASH - this is a stock image. Delete build/conf and rebuild."
-            echo "[brisby] Check that meta-brisby balena-image.bbappend IMAGE_INSTALL is applied and rebuild."
+            echo "[brisby] Checked: ${BRISBY_MANIFEST}"
+            echo "[brisby] DO NOT FLASH - this is a stock image. Run with --clean-config then rebuild:"
+            echo "[brisby]   $0 --clean-config"
+            echo "[brisby]   $0"
+            echo "[brisby] If that still fails, run $0 --diagnose and see brisby_extras/TROUBLESHOOT_STOCK_IMAGE.md"
         else
             echo "[brisby] Verified: image manifest contains prevent-host-os-update and panel packages."
         fi
     else
-        echo "[brisby] Note: no .manifest found in deploy dir; skipping package verification."
+        echo "[brisby] Note: no balena-image-*.manifest found in ${DEPLOY_DIR}; skipping package verification."
     fi
 
     echo ""
