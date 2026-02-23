@@ -35,6 +35,7 @@ usage() {
     echo "Options:"
     echo "  -n, --dry-run           Only prepare build space and meta-brisby; do not run build"
     echo "  -r, --refresh           Refresh panel/overlay sources from brisby_extras into meta-brisby"
+    echo "  --clean-config         Remove build/conf so next build uses meta-brisby template (fixes stock image)"
     echo "  --cleansstate-kernel   Run only 'bitbake -c cleansstate linux-raspberrypi' (fix pseudo/inode errors), then exit"
     echo "  --cleansstate-panel    Clean sstate cache for panel-jd9365da-h3 to force rebuild with new driver"
     echo "  --rebuild-helper       Rebuild the Docker helper image (use if you see groupadd GID errors)"
@@ -51,11 +52,13 @@ DRY_RUN=""
 REBUILD_HELPER=""
 CLEANSTATE_KERNEL=""
 CLEANSTATE_PANEL=""
+CLEAN_CONFIG=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -n|--dry-run)             DRY_RUN="1"; shift ;;
         -r|--refresh)             REFRESH_SOURCES="1"; shift ;;
+        --clean-config)           CLEAN_CONFIG="1"; shift ;;
         --cleansstate-kernel)     CLEANSTATE_KERNEL="1"; shift ;;
         --cleansstate-panel)      CLEANSTATE_PANEL="1"; shift ;;
         --rebuild-helper)         REBUILD_HELPER="1"; shift ;;
@@ -72,6 +75,19 @@ echo ""
 if [[ ! -d "${BUILD_SPACE}" ]]; then
     echo "[brisby] Creating build space: ${BUILD_SPACE}"
     mkdir -p "${BUILD_SPACE}"
+fi
+
+# Optional: clean build config (fixes stock image when meta-brisby was not in bblayers)
+if [[ -n "${CLEAN_CONFIG}" ]]; then
+    echo "[brisby] Cleaning build config..."
+    for conf_dir in "${REPO_ROOT}/build/conf" "${BUILD_SPACE}/build/conf"; do
+        if [[ -d "${conf_dir}" ]]; then
+            rm -rf "${conf_dir}"
+            echo "[brisby] Removed ${conf_dir}"
+        fi
+    done
+    echo "[brisby] Config cleaned. Re-run without --clean-config to build."
+    exit 0
 fi
 
 # Optional: refresh panel and overlay sources from brisby_extras into meta-brisby
@@ -112,9 +128,9 @@ if [[ ! -f "${REPO_ROOT}/balena-yocto-scripts/build/balena-build.sh" ]]; then
 fi
 
 # Apply overrides from brisby_extras/overrides/ onto submodules (no need to push to other repos)
-# This way only the fork needs to be cloned; balena-yocto-scripts and poky stay upstream.
+# This way only the fork needs to be cloned; balena-yocto-scripts, poky, meta-balena-raspberrypi stay upstream.
 if [[ -d "${BRISBY_EXTRAS}/overrides" ]]; then
-    echo "[brisby] Applying overrides (balena-yocto-scripts, poky)..."
+    echo "[brisby] Applying overrides (balena-yocto-scripts, poky, meta-balena-raspberrypi)..."
     [[ -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/entry_scripts/prepare-and-start.sh" ]] && \
         cp -f "${BRISBY_EXTRAS}/overrides/balena-yocto-scripts/automation/entry_scripts/prepare-and-start.sh" \
               "${REPO_ROOT}/balena-yocto-scripts/automation/entry_scripts/"
@@ -124,6 +140,13 @@ if [[ -d "${BRISBY_EXTRAS}/overrides" ]]; then
     [[ -f "${BRISBY_EXTRAS}/overrides/poky/meta/classes/sanity.bbclass" ]] && \
         cp -f "${BRISBY_EXTRAS}/overrides/poky/meta/classes/sanity.bbclass" \
               "${REPO_ROOT}/layers/poky/meta/classes/"
+    # meta-balena-raspberrypi: enable console=tty1 and firmware splash for raspberrypi5 (DSI boot text/splash)
+    [[ -f "${BRISBY_EXTRAS}/overrides/meta-balena-raspberrypi/recipes-bsp/bootfiles/rpi-cmdline.bbappend" ]] && \
+        cp -f "${BRISBY_EXTRAS}/overrides/meta-balena-raspberrypi/recipes-bsp/bootfiles/rpi-cmdline.bbappend" \
+              "${REPO_ROOT}/layers/meta-balena-raspberrypi/recipes-bsp/bootfiles/"
+    [[ -f "${BRISBY_EXTRAS}/overrides/meta-balena-raspberrypi/recipes-bsp/bootfiles/rpi-config_git.bbappend" ]] && \
+        cp -f "${BRISBY_EXTRAS}/overrides/meta-balena-raspberrypi/recipes-bsp/bootfiles/rpi-config_git.bbappend" \
+              "${REPO_ROOT}/layers/meta-balena-raspberrypi/recipes-bsp/bootfiles/"
     echo "[brisby] Overrides applied."
 fi
 
