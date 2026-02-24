@@ -113,6 +113,7 @@ for file in $FILES_TO_DOWNLOAD; do
             new_file_path="${local_file_path%.balenaos-img}.img"
             if mv "$local_file_path" "$new_file_path"; then
                 echo -e "${GREEN}✓ (renamed to .img)${NC}"
+                balena os configure $new_file_path --fleet brisby/casco_smart --config-wifi-ssid TellMyWifiILoveHer --config-wifi-key B0ssF4mily! 
             else
                 echo -e "${YELLOW}✓ (download succeeded, rename failed)${NC}"
             fi

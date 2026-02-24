@@ -146,3 +146,33 @@ Use that exact file for flashing. See `brisby_extras/FLASH_VERIFY.md` if the dev
   `echo $(cat /sys/class/backlight/*/max_brightness) > /sys/class/backlight/*/brightness`  
   (replace `*` with the actual device name if needed).  
 - On Pi5, the DSI display can be **card1** (HDMI is card0). The diagnostic now lists all DRM cards. If you need to force output to the panel, you may need to use the correct DRM device/card.
+
+**X.org "no screens found" (e.g. balena browser container):** X only probes card0 (HDMI); the DSI panel is on **card1** (drm-rp1-dsi), so X finds no screens. Use the RP1 DSI X config so X uses card1.
+
+- Config file: **`brisby_extras/99-rp1-dsi.conf`** (same as `casco-web/browser/99-rp1-dsi.conf`). It sets `Option "kmsdev" "/dev/dri/card1"` and 720×1600 for the panel.
+- **On Balena OS** volume-mounting host paths into the container is not reliable; **copy the file into your app image** instead. In your browser (or X) service Dockerfile, install it as **99-z-rp1-dsi.conf** so it loads **after** the base image's Pi 5 X config (e.g. `99-rpi5.conf`) and takes precedence (X reads `xorg.conf.d/` in alphabetical order):
+  ```dockerfile
+  RUN mkdir -p /etc/X11/xorg.conf.d
+  COPY 99-rp1-dsi.conf /etc/X11/xorg.conf.d/99-z-rp1-dsi.conf
+  ```
+  (Place `99-rp1-dsi.conf` in the build context, e.g. from this repo's `brisby_extras/` or from `casco-web/browser/`.)
+
+- **If X still reports "no screens found"** even with `99-z-rp1-dsi.conf` in the image:
+
+  1. **In the browser container**, confirm the config is present and what X read:
+     ```bash
+     balena exec browser ls -la /etc/X11/xorg.conf.d/
+     balena exec browser cat /etc/X11/xorg.conf.d/99-z-rp1-dsi.conf | grep kmsdev
+     balena exec browser cat /var/log/Xorg.0.log | grep -iE "config file|parsing|xorg.conf.d|kmsdev|card|no screens|error"
+     ```
+  2. **Which DRM cards exist in the container?** If only `card0` exists (no `card1`), the DSI may be card0 on your device — change `kmsdev` in `99-rp1-dsi.conf` to `/dev/dri/card0` and rebuild:
+     ```bash
+     balena exec browser ls -la /dev/dri/
+     ```
+  3. **On the host**, see which card has the DSI connector (so you know which card to point X at):
+     ```bash
+     ls /sys/class/drm/card*/card*-DSI-* 2>/dev/null || ls -d /sys/class/drm/card*
+     for c in /sys/class/drm/card*-*/status; do echo "$c: $(cat $c 2>/dev/null)"; done
+     ```
+  4. **Default layout override**: X often uses the ServerLayout named "Default". Our 99-rp1-dsi.conf now includes ServerLayout "Default" pointing at our DSI Screen0 so it overrides the base. Rebuild the browser image so the container gets the updated config.
+  5. **Container must see `/dev/dri`**: Requires kiosk and/or privileged so the container gets the host’s DRI devices.

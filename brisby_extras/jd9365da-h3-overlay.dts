@@ -10,8 +10,6 @@
  *
  * Driver match:
  *   - compatible must include: "cw,txw990002b0"
- *
- * Verified working on bare-metal Raspberry Pi (e.g. RPi light box) with this config.
  */
 
 /{
@@ -75,7 +73,7 @@
 				vdd-supply = <&panel_vdd>;
 				vccio-supply = <&panel_vccio>;
 
-				reset-gpios = <&rp1_gpio 14 0>;
+				reset-gpios = <&rp1_gpio 14 1>;
 
 				dsi,lanes = <4>;
 				dsi,format = <0>; /* MIPI_DSI_FMT_RGB888 */
